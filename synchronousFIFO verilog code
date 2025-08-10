@@ -1,0 +1,59 @@
+module sync_fifo #(
+    parameter WIDTH = 8,   
+    parameter DEPTH = 16   
+)(
+    input  wire              clk,
+    input  wire              rst_n,    
+    input  wire              wr_en,    
+    input  wire              rd_en,    
+    input  wire [WIDTH-1:0]  din,      
+    output reg  [WIDTH-1:0]  dout,     
+    output wire              full,     //flags
+    output wire              empty     );
+
+    // Pointer sizes: log2(DEPTH) bits
+    localparam PTR_WIDTH = $clog2(DEPTH);
+
+    reg [WIDTH-1:0] mem [0:DEPTH-1];   
+    reg [PTR_WIDTH:0] count;           
+    reg [PTR_WIDTH-1:0] w_ptr, r_ptr;  
+
+    
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            w_ptr <= 0;
+        end else if (wr_en && !full) begin
+            mem[w_ptr] <= din;
+            w_ptr <= w_ptr + 1;
+        end
+    end
+
+    
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            r_ptr <= 0;
+            dout <= 0;
+        end else if (rd_en && !empty) begin
+            dout <= mem[r_ptr];
+            r_ptr <= r_ptr + 1;
+        end
+    end
+
+    // Counter update
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            count <= 0;
+        end else begin
+            case ({wr_en && !full, rd_en && !empty})
+                2'b10: count <= count + 1;
+                2'b01: count <= count - 1;
+                default: count <= count;  
+            endcase
+        end
+    end
+
+    // Status flags
+    assign full  = (count == DEPTH);
+    assign empty = (count == 0);
+
+endmodule
